@@ -56,36 +56,49 @@
 <nav class="navbar navbar-dark bg-primary shadow-sm">
     <div class="container">
         <a class="navbar-brand fw-bold" href="/">FinStatus Tracker</a>
-        <div class="d-flex">
-            <form method="POST" action="{{ url_for('add_transaction') }}" style="display:inline;" class="me-2">
-                <input type="hidden" name="type" value="Income">
-                <input type="hidden" name="amount" value="28.00">
-                <input type="hidden" name="category" value="อื่นๆ">
-                <input type="hidden" name="date_posted" value="">
-                <input type="hidden" name="description" value="รายรับด่วน 28 บาท">
-                <button type="submit" class="btn btn-sm btn-info text-white fw-bold">
-                    +฿28
-                </button>
-            </form>
+        <div class="d-flex align-items-center">
 
-            <form method="POST" action="{{ url_for('add_transaction') }}" style="display:inline;" class="me-3">
-                <input type="hidden" name="type" value="Income">
-                <input type="hidden" name="amount" value="42.00">
-                <input type="hidden" name="category" value="อื่นๆ">
-                <input type="hidden" name="date_posted" value="">
-                <input type="hidden" name="description" value="รายรับด่วน 42 บาท">
-                <button type="submit" class="btn btn-sm btn-success fw-bold">
-                    +฿42
-                </button>
-            </form>
+            {% if current_user.is_authenticated %}
+                <form method="POST" action="{{ url_for('add_transaction') }}" style="display:inline;" class="me-2">
+                    <input type="hidden" name="type" value="Income">
+                    <input type="hidden" name="amount" value="28.00">
+                    <input type="hidden" name="category" value="อื่นๆ">
+                    <input type="hidden" name="date_posted" value="">
+                    <input type="hidden" name="description" value="รายรับด่วน 28 บาท">
+                    <button type="submit" class="btn btn-sm btn-info text-white fw-bold">
+                        +฿28
+                    </button>
+                </form>
 
-            <button class="btn btn-light text-primary me-2" data-bs-toggle="modal" data-bs-target="#addModal">
-                 + เพิ่มรายการ
-            </button>
-            <form action="{{ url_for('clear_all') }}" method="POST" style="display:inline;"
-                  onsubmit="return confirm('คุณแน่ใจหรือไม่ที่จะล้างข้อมูลทั้งหมด?')">
-                <button class="btn btn-danger">ล้างข้อมูลทั้งหมด</button>
-            </form>
+                <form method="POST" action="{{ url_for('add_transaction') }}" style="display:inline;" class="me-3">
+                    <input type="hidden" name="type" value="Income">
+                    <input type="hidden" name="amount" value="42.00">
+                    <input type="hidden" name="category" value="อื่นๆ">
+                    <input type="hidden" name="date_posted" value="">
+                    <input type="hidden" name="description" value="รายรับด่วน 42 บาท">
+                    <button type="submit" class="btn btn-sm btn-success fw-bold">
+                        +฿42
+                    </button>
+                </form>
+
+                <button class="btn btn-light text-primary me-2" data-bs-toggle="modal" data-bs-target="#addModal">
+                    + เพิ่มรายการ
+                </button>
+                <form action="{{ url_for('clear_all') }}" method="POST" style="display:inline;"
+                      onsubmit="return confirm('คุณแน่ใจหรือไม่ที่จะล้างข้อมูลทั้งหมด?')">
+                    <button class="btn btn-danger me-2">ล้างข้อมูลทั้งหมด</button>
+                </form>
+
+                <span class="navbar-text me-2 text-white d-none d-sm-block">
+                    สวัสดี, {{ current_user.username }}
+                </span>
+                <a href="{{ url_for('logout') }}" class="btn btn-outline-light">ออกจากระบบ</a>
+
+            {% else %}
+                <a href="{{ url_for('login') }}" class="btn btn-light text-primary me-2">เข้าสู่ระบบ</a>
+                <a href="{{ url_for('register') }}" class="btn btn-outline-light">ลงทะเบียน</a>
+            {% endif %}
+
         </div>
     </div>
 </nav>
@@ -94,104 +107,117 @@
 
     <h2 class="text-center mb-5 fw-light">ภาพรวมทางการเงิน</h2>
 
-    <form method="get" action="{{ url_for('index') }}" class="mb-4">
-        <div class="input-group data-card">
-            <input type="date" name="date" class="form-control" value="{{ request.args.get('date', '') }}">
-            <button class="btn btn-primary">ดูย้อนหลังรายวัน</button>
-        </div>
-    </form>
+    {% if current_user.is_authenticated %}
 
-    <div class="row g-4 mb-5">
-        <div class="col-md-4">
-            <div class="card summary-card bg-white p-3 shadow-sm border-start border-primary border-5">
-                <div class="card-body">
-                    <h5 class="card-title text-muted fw-normal">ยอดคงเหลือสุทธิ</h5>
-                    <p class="summary-value {% if net_balance>=0 %}balance-positive{% else %}balance-negative{% endif %} mb-0">
-                        ฿{{ "{:,.2f}".format(net_balance) }}
-                    </p>
+        <form method="get" action="{{ url_for('index') }}" class="mb-4">
+            <div class="input-group data-card">
+                <input type="date" name="date" class="form-control" value="{{ request.args.get('date', '') }}">
+                <button class="btn btn-primary">ดูย้อนหลังรายวัน</button>
+            </div>
+        </form>
+
+        <div class="row g-4 mb-5">
+            <div class="col-md-4">
+                <div class="card summary-card bg-white p-3 shadow-sm border-start border-primary border-5">
+                    <div class="card-body">
+                        <h5 class="card-title text-muted fw-normal">ยอดคงเหลือสุทธิ</h5>
+                        <p class="summary-value {% if net_balance>=0 %}balance-positive{% else %}balance-negative{% endif %} mb-0">
+                            ฿{{ "{:,.2f}".format(net_balance) }}
+                        </p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card summary-card bg-white p-3 shadow-sm border-start border-success border-5">
+                    <div class="card-body">
+                        <h5 class="card-title text-muted fw-normal">รายรับทั้งหมด</h5>
+                        <p class="summary-value income mb-0">฿{{ "{:,.2f}".format(total_income) }}</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card summary-card bg-white p-3 shadow-sm border-start border-danger border-5">
+                    <div class="card-body">
+                        <h5 class="card-title text-muted fw-normal">รายจ่ายทั้งหมด</h5>
+                        <p class="summary-value expense mb-0">฿{{ "{:,.2f}".format(total_expense) }}</p>
+                    </div>
                 </div>
             </div>
         </div>
-        <div class="col-md-4">
-            <div class="card summary-card bg-white p-3 shadow-sm border-start border-success border-5">
-                <div class="card-body">
-                    <h5 class="card-title text-muted fw-normal">รายรับทั้งหมด</h5>
-                    <p class="summary-value income mb-0">฿{{ "{:,.2f}".format(total_income) }}</p>
+
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card p-4 mb-5 data-card">
+                    <h5 class="text-center mb-4">กราฟสัดส่วนรายจ่าย</h5>
+                    <div class="chart-container">
+                        <canvas id="expenseChart"></canvas>
+                    </div>
                 </div>
             </div>
         </div>
-        <div class="col-md-4">
-            <div class="card summary-card bg-white p-3 shadow-sm border-start border-danger border-5">
-                <div class="card-body">
-                    <h5 class="card-title text-muted fw-normal">รายจ่ายทั้งหมด</h5>
-                    <p class="summary-value expense mb-0">฿{{ "{:,.2f}".format(total_expense) }}</p>
-                </div>
-            </div>
+
+        <h4 class="mb-3">รายการธุรกรรม</h4>
+        <div class="data-card overflow-hidden mb-5">
+            <table class="table table-striped table-hover mb-0">
+                <thead class="table-dark">
+                <tr>
+                    <th>วันที่</th>
+                    <th>ประเภท</th>
+                    <th>หมวดหมู่</th>
+                    <th class="text-end">จำนวนเงิน</th>
+                    <th class="text-center">จัดการ</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for t in transactions %}
+                <tr data-id="{{ t.id }}" data-type="{{ t.type }}" data-amount="{{ t.amount }}"
+                    data-category="{{ t.category }}" data-date="{{ t.date_posted.strftime('%Y-%m-%d') }}">
+
+                    <td>{{ t.date_posted.strftime('%d/%m/%Y') }}</td>
+                    <td>
+                        {% if t.type == 'Income' %}
+                            <span class="badge bg-success">รายรับ</span>
+                        {% else %}
+                            <span class="badge bg-danger">รายจ่าย</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ t.category }}</td>
+                    <td class="text-end">
+                        {% if t.type == 'Income' %}
+                            <span class="income">+฿{{ "{:,.2f}".format(t.amount) }}</span>
+                        {% else %}
+                            <span class="expense">-฿{{ "{:,.2f}".format(t.amount) }}</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-center">
+                        <button class="btn btn-sm btn-outline-info me-1 btn-edit"
+                                data-bs-toggle="modal" data-bs-target="#editModal"
+                                data-id="{{ t.id }}">
+                            แก้ไข
+                        </button>
+                        <form method="POST" action="{{ url_for('delete_transaction', transaction_id=t.id) }}"
+                              onsubmit="return confirm('ลบรายการนี้หรือไม่?')" style="display:inline;">
+                            <button class="btn btn-sm btn-outline-danger">ลบ</button>
+                        </form>
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="5" class="text-center text-muted p-4">ยังไม่มีรายการ</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
         </div>
-    </div>
 
-    <div class="row">
-        <div class="col-md-12">
-            <div class="card p-4 mb-5 data-card">
-                <h5 class="text-center mb-4">กราฟสัดส่วนรายจ่าย</h5>
-                <div class="chart-container">
-                    <canvas id="expenseChart"></canvas>
-                </div>
-            </div>
+    {% else %}
+        <div class="alert alert-info text-center p-5 mt-5" role="alert">
+            <h4 class="alert-heading">ยินดีต้อนรับสู่ FinStatus Tracker!</h4>
+            <p>กรุณาลงทะเบียนหรือเข้าสู่ระบบเพื่อเริ่มบันทึกและจัดการรายรับ-รายจ่ายส่วนตัวของคุณ</p>
+            <hr>
+            <a href="{{ url_for('login') }}" class="btn btn-success btn-lg me-3">เข้าสู่ระบบ</a>
+            <a href="{{ url_for('register') }}" class="btn btn-outline-primary btn-lg">ลงทะเบียน</a>
         </div>
-    </div>
+    {% endif %}
 
-    <h4 class="mb-3">รายการธุรกรรม</h4>
-    <div class="data-card overflow-hidden mb-5">
-        <table class="table table-striped table-hover mb-0">
-            <thead class="table-dark">
-            <tr>
-                <th>วันที่</th>
-                <th>ประเภท</th>
-                <th>หมวดหมู่</th>
-                <th class="text-end">จำนวนเงิน</th>
-                <th class="text-center">จัดการ</th>
-            </tr>
-            </thead>
-            <tbody>
-            {% for t in transactions %}
-            <tr data-id="{{ t.id }}" data-type="{{ t.type }}" data-amount="{{ t.amount }}"
-                data-category="{{ t.category }}" data-date="{{ t.date_posted.strftime('%Y-%m-%d') }}">
-
-                <td>{{ t.date_posted.strftime('%d/%m/%Y') }}</td>
-                <td>
-                    {% if t.type == 'Income' %}
-                        <span class="badge bg-success">รายรับ</span>
-                    {% else %}
-                        <span class="badge bg-danger">รายจ่าย</span>
-                    {% endif %}
-                </td>
-                <td>{{ t.category }}</td>
-                <td class="text-end">
-                    {% if t.type == 'Income' %}
-                        <span class="income">+฿{{ "{:,.2f}".format(t.amount) }}</span>
-                    {% else %}
-                        <span class="expense">-฿{{ "{:,.2f}".format(t.amount) }}</span>
-                    {% endif %}
-                </td>
-                <td class="text-center">
-                    <button class="btn btn-sm btn-outline-info me-1 btn-edit"
-                            data-bs-toggle="modal" data-bs-target="#editModal"
-                            data-id="{{ t.id }}">
-                        แก้ไข
-                    </button>
-                    <form method="POST" action="{{ url_for('delete_transaction', transaction_id=t.id) }}"
-                          onsubmit="return confirm('ลบรายการนี้หรือไม่?')" style="display:inline;">
-                        <button class="btn btn-sm btn-outline-danger">ลบ</button>
-                    </form>
-                </td>
-            </tr>
-            {% else %}
-            <tr><td colspan="5" class="text-center text-muted p-4">ยังไม่มีรายการ</td></tr>
-            {% endfor %}
-            </tbody>
-        </table>
-    </div>
 </div>
 
 <div class="modal fade" id="addModal" tabindex="-1">
