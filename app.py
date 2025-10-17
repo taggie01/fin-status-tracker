@@ -19,6 +19,7 @@ if DATABASE_URL:
     if DATABASE_URL.startswith("postgres://"):
         DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 else:
+    # แก้ชื่อเป็น new_fin_tracker.db เพื่อให้สร้างใหม่ (ตามที่คุยกัน)
     DATABASE_URL = 'sqlite:///new_fin_tracker.db'
 
 app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
@@ -76,7 +77,7 @@ with app.app_context():
 
 
 # ==============================
-#  AUTHENTICATION ROUTES
+#  AUTHENTICATION ROUTES (Routes ที่คุณเพิ่งเพิ่มโค้ด Logic)
 # ==============================
 
 @app.route('/register', methods=['GET', 'POST'])
@@ -88,21 +89,28 @@ def register():
         username = request.form['username']
         password = request.form['password']
 
-        # ตรวจสอบว่า Username นี้มีอยู่แล้วหรือไม่
+        # 1. ตรวจสอบว่า Username นี้มีอยู่แล้วหรือไม่
         user = User.query.filter_by(username=username).first()
         if user:
             flash('ชื่อผู้ใช้งานนี้มีคนใช้แล้ว', 'danger')
             return redirect(url_for('register'))
 
-        # สร้างผู้ใช้ใหม่และเข้ารหัสรหัสผ่าน
+        # 2. สร้างผู้ใช้ใหม่และเข้ารหัสรหัสผ่าน
         new_user = User(username=username)
         new_user.set_password(password)
 
-        db.session.add(new_user)
-        db.session.commit()
+        # 3. บันทึกเข้าฐานข้อมูล
+        try:
+            db.session.add(new_user)
+            db.session.commit()
 
-        flash('ลงทะเบียนสำเร็จ! กรุณาเข้าสู่ระบบ', 'success')
-        return redirect(url_for('login'))
+            flash('ลงทะเบียนสำเร็จ! กรุณาเข้าสู่ระบบ', 'success')
+            return redirect(url_for('login'))
+
+        except Exception as e:
+            db.session.rollback()
+            flash(f'เกิดข้อผิดพลาดในการลงทะเบียน: {e}', 'danger')
+            return redirect(url_for('register'))
 
     return render_template('register.html')
 
