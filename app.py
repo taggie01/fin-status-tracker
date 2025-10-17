@@ -19,7 +19,7 @@ if DATABASE_URL:
     if DATABASE_URL.startswith("postgres://"):
         DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 else:
-    # แก้ชื่อเป็น new_fin_tracker.db เพื่อให้สร้างใหม่ (ตามที่คุยกัน)
+    # ใช้ชื่อ new_fin_tracker.db สำหรับ Local
     DATABASE_URL = 'sqlite:///new_fin_tracker.db'
 
 app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
@@ -31,12 +31,10 @@ db = SQLAlchemy(app)
 # ==============================
 login_manager = LoginManager()
 login_manager.init_app(app)
-login_manager.login_view = 'login'  # กำหนดให้ redirect ไปหน้า login หากยังไม่ล็อกอิน
-
+login_manager.login_view = 'login'
 
 @login_manager.user_loader
 def load_user(user_id):
-    """ฟังก์ชันนี้บอก Flask-Login ว่าจะโหลดข้อมูล User อย่างไรจาก ID ที่เก็บใน Session"""
     return User.query.get(int(user_id))
 
 
@@ -48,9 +46,9 @@ def load_user(user_id):
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(60), unique=True, nullable=False)
-    password_hash = db.Column(db.String(128), nullable=False)
+    # ***แก้ไข: เพิ่มขนาดคอลัมน์เป็น 512 เพื่อรองรับ Werkzeug Hash (แก้ปัญหา RightTruncation)***
+    password_hash = db.Column(db.String(512), nullable=False)
 
-    # เพิ่ม method สำหรับเข้ารหัสและตรวจสอบรหัสผ่าน
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
 
@@ -67,7 +65,6 @@ class Transaction(db.Model):
     amount = db.Column(db.Float)
     date_posted = db.Column(db.Date, default=datetime.now().date())
 
-    # NEW: Foreign Key เพื่อระบุเจ้าของรายการ
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     user = db.relationship('User', backref='transactions')
 
@@ -77,7 +74,7 @@ with app.app_context():
 
 
 # ==============================
-#  AUTHENTICATION ROUTES (Routes ที่คุณเพิ่งเพิ่มโค้ด Logic)
+#  AUTHENTICATION ROUTES
 # ==============================
 
 @app.route('/register', methods=['GET', 'POST'])
@@ -89,17 +86,14 @@ def register():
         username = request.form['username']
         password = request.form['password']
 
-        # 1. ตรวจสอบว่า Username นี้มีอยู่แล้วหรือไม่
         user = User.query.filter_by(username=username).first()
         if user:
             flash('ชื่อผู้ใช้งานนี้มีคนใช้แล้ว', 'danger')
             return redirect(url_for('register'))
 
-        # 2. สร้างผู้ใช้ใหม่และเข้ารหัสรหัสผ่าน
         new_user = User(username=username)
         new_user.set_password(password)
 
-        # 3. บันทึกเข้าฐานข้อมูล
         try:
             db.session.add(new_user)
             db.session.commit()
@@ -126,12 +120,10 @@ def login():
 
         user = User.query.filter_by(username=username).first()
 
-        # ตรวจสอบว่ามีผู้ใช้หรือไม่ และรหัสผ่านถูกต้องหรือไม่
         if user is None or not user.check_password(password):
             flash('ชื่อผู้ใช้งานหรือรหัสผ่านไม่ถูกต้อง', 'danger')
             return redirect(url_for('login'))
 
-        # ล็อกอินสำเร็จ
         login_user(user)
         return redirect(url_for('index'))
 
@@ -151,11 +143,10 @@ def logout():
 # ==============================
 
 @app.route('/', methods=['GET'])
-@login_required  # ต้องล็อกอินก่อนเข้าถึง
+@login_required
 def index():
     date_filter = request.args.get('date')
 
-    # Query: ดึงข้อมูลเฉพาะของผู้ใช้ที่ล็อกอินอยู่ (current_user.id)
     base_query = Transaction.query.filter_by(user_id=current_user.id)
 
     if date_filter:
@@ -169,12 +160,10 @@ def index():
     else:
         transactions = base_query.order_by(Transaction.date_posted.desc()).all()
 
-    # คำนวณสรุปยอด (จากรายการที่ถูก Filter แล้ว)
     total_income = sum(t.amount for t in transactions if t.type == 'Income')
     total_expense = sum(t.amount for t in transactions if t.type == 'Expense')
     net_balance = total_income - total_expense
 
-    # สรุปยอดรายจ่ายตามหมวดหมู่สำหรับกราฟ
     category_summary = {}
     for t in transactions:
         if t.type == 'Expense':
@@ -209,7 +198,6 @@ def add_transaction():
 
         date_posted = datetime.strptime(date_str, '%Y-%m-%d').date() if date_str else datetime.now().date()
 
-        # บันทึกรายการพร้อม user_id
         new_t = Transaction(type=t_type, amount=amount, category=category, description=description,
                             date_posted=date_posted, user_id=current_user.id)
         db.session.add(new_t)
@@ -227,7 +215,6 @@ def add_transaction():
 @login_required
 def edit_transaction(transaction_id):
     try:
-        # ตรวจสอบความเป็นเจ้าของด้วย user_id
         t = Transaction.query.filter_by(id=transaction_id, user_id=current_user.id).first_or_404()
 
         t.type = request.form['type']
@@ -252,7 +239,6 @@ def edit_transaction(transaction_id):
 @app.route('/delete/<int:transaction_id>', methods=['POST'])
 @login_required
 def delete_transaction(transaction_id):
-    # ตรวจสอบความเป็นเจ้าของด้วย user_id
     t = Transaction.query.filter_by(id=transaction_id, user_id=current_user.id).first()
     if t:
         db.session.delete(t)
@@ -269,7 +255,6 @@ def delete_transaction(transaction_id):
 @app.route('/clear_all', methods=['POST'])
 @login_required
 def clear_all():
-    # ลบรายการทั้งหมดที่ user_id ตรงกับผู้ใช้ปัจจุบันเท่านั้น
     Transaction.query.filter_by(user_id=current_user.id).delete()
     db.session.commit()
     flash('ล้างข้อมูลทั้งหมดเรียบร้อยแล้ว', 'warning')
