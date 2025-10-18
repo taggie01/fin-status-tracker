@@ -33,6 +33,7 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 
+
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
@@ -42,11 +43,11 @@ def load_user(user_id):
 #  MODELS (โครงสร้างฐานข้อมูล)
 # ==============================
 
-# NEW: User Model สำหรับการล็อกอิน
+# User Model สำหรับการล็อกอิน
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(60), unique=True, nullable=False)
-    # ***แก้ไข: เพิ่มขนาดคอลัมน์เป็น 512 เพื่อรองรับ Werkzeug Hash (แก้ปัญหา RightTruncation)***
+    # แก้ไขขนาดคอลัมน์เป็น 512 เพื่อรองรับ Werkzeug Hash (แก้ปัญหา RightTruncation)
     password_hash = db.Column(db.String(512), nullable=False)
 
     def set_password(self, password):
@@ -56,7 +57,7 @@ class User(UserMixin, db.Model):
         return check_password_hash(self.password_hash, password)
 
 
-# แก้ไข: Transaction Model เพื่อเชื่อมโยงกับผู้ใช้
+# Transaction Model เพื่อเชื่อมโยงกับผู้ใช้
 class Transaction(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     type = db.Column(db.String(10))
@@ -67,6 +68,18 @@ class Transaction(db.Model):
 
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     user = db.relationship('User', backref='transactions')
+
+
+# NEW: Favorite Model เพื่อเก็บรายการโปรดของผู้ใช้
+class Favorite(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    amount = db.Column(db.Float, nullable=False)
+    type = db.Column(db.String(10), nullable=False)
+    category = db.Column(db.String(50), nullable=False)
+
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    user = db.relationship('User', backref='favorites')
 
 
 with app.app_context():
@@ -139,7 +152,53 @@ def logout():
 
 
 # ==============================
-#  MAIN APP ROUTES (ใช้ @login_required และ filter ข้อมูลตาม user_id)
+#  FAVORITES ROUTES (รายการโปรด)
+# ==============================
+
+@app.route('/favorites', methods=['GET'])
+@login_required
+def manage_favorites():
+    """แสดงหน้าจัดการรายการโปรดทั้งหมดของผู้ใช้"""
+    favorites = Favorite.query.filter_by(user_id=current_user.id).order_by(Favorite.name).all()
+    return render_template('favorites.html', favorites=favorites)
+
+
+@app.route('/favorites/add', methods=['POST'])
+@login_required
+def add_favorite():
+    """เพิ่มรายการโปรดใหม่"""
+    try:
+        new_fav = Favorite(
+            name=request.form['name'],
+            amount=float(request.form['amount']),
+            type=request.form['type'],
+            category=request.form['category'],
+            user_id=current_user.id
+        )
+        db.session.add(new_fav)
+        db.session.commit()
+        flash(f'เพิ่มรายการโปรด "{new_fav.name}" เรียบร้อยแล้ว', 'success')
+    except Exception as e:
+        flash(f'เกิดข้อผิดพลาดในการเพิ่มรายการโปรด: {e}', 'danger')
+    return redirect(url_for('manage_favorites'))
+
+
+@app.route('/favorites/delete/<int:favorite_id>', methods=['POST'])
+@login_required
+def delete_favorite(favorite_id):
+    """ลบรายการโปรด"""
+    fav = Favorite.query.filter_by(id=favorite_id, user_id=current_user.id).first()
+    if fav:
+        db.session.delete(fav)
+        db.session.commit()
+        flash(f'ลบรายการโปรด "{fav.name}" เรียบร้อยแล้ว', 'danger')
+    else:
+        flash('ไม่พบรายการโปรดที่ต้องการลบ', 'warning')
+    return redirect(url_for('manage_favorites'))
+
+
+# ==============================
+#  MAIN APP ROUTES (Transaction CRUD)
 # ==============================
 
 @app.route('/', methods=['GET'])
@@ -147,7 +206,11 @@ def logout():
 def index():
     date_filter = request.args.get('date')
 
+    # Query: ดึงข้อมูลเฉพาะของผู้ใช้ที่ล็อกอินอยู่
     base_query = Transaction.query.filter_by(user_id=current_user.id)
+
+    # Query: ดึงรายการโปรดทั้งหมดของผู้ใช้มาแสดงใน Navbar
+    favorites = Favorite.query.filter_by(user_id=current_user.id).order_by(Favorite.name).all()
 
     if date_filter:
         try:
@@ -160,10 +223,12 @@ def index():
     else:
         transactions = base_query.order_by(Transaction.date_posted.desc()).all()
 
+    # คำนวณสรุปยอด (จากรายการที่ถูก Filter แล้ว)
     total_income = sum(t.amount for t in transactions if t.type == 'Income')
     total_expense = sum(t.amount for t in transactions if t.type == 'Expense')
     net_balance = total_income - total_expense
 
+    # สรุปยอดรายจ่ายตามหมวดหมู่สำหรับกราฟ
     category_summary = {}
     for t in transactions:
         if t.type == 'Expense':
@@ -179,12 +244,13 @@ def index():
         total_expense=total_expense,
         net_balance=net_balance,
         category_summary=category_summary,
-        current_date=current_date
+        current_date=current_date,
+        favorites=favorites  # NEW: ส่งรายการโปรดไปที่ HTML
     )
 
 
 # ------------------------------
-# 1. เพิ่มรายการ (Create)
+# 1. เพิ่มรายการ (Create) - ใช้ร่วมกับปุ่มโปรด
 # ------------------------------
 @app.route('/add', methods=['POST'])
 @login_required
@@ -193,11 +259,12 @@ def add_transaction():
         t_type = request.form['type']
         amount = float(request.form['amount'])
         category = request.form['category']
-        description = request.form.get('description', '')
+        description = request.form.get('description', '')  # รองรับค่าว่างจากปุ่มโปรด
         date_str = request.form.get('date_posted', '')
 
         date_posted = datetime.strptime(date_str, '%Y-%m-%d').date() if date_str else datetime.now().date()
 
+        # บันทึกรายการพร้อม user_id
         new_t = Transaction(type=t_type, amount=amount, category=category, description=description,
                             date_posted=date_posted, user_id=current_user.id)
         db.session.add(new_t)
@@ -215,6 +282,7 @@ def add_transaction():
 @login_required
 def edit_transaction(transaction_id):
     try:
+        # ตรวจสอบความเป็นเจ้าของด้วย user_id
         t = Transaction.query.filter_by(id=transaction_id, user_id=current_user.id).first_or_404()
 
         t.type = request.form['type']
@@ -239,6 +307,7 @@ def edit_transaction(transaction_id):
 @app.route('/delete/<int:transaction_id>', methods=['POST'])
 @login_required
 def delete_transaction(transaction_id):
+    # ตรวจสอบความเป็นเจ้าของด้วย user_id
     t = Transaction.query.filter_by(id=transaction_id, user_id=current_user.id).first()
     if t:
         db.session.delete(t)
@@ -255,6 +324,7 @@ def delete_transaction(transaction_id):
 @app.route('/clear_all', methods=['POST'])
 @login_required
 def clear_all():
+    # ลบรายการทั้งหมดที่ user_id ตรงกับผู้ใช้ปัจจุบันเท่านั้น
     Transaction.query.filter_by(user_id=current_user.id).delete()
     db.session.commit()
     flash('ล้างข้อมูลทั้งหมดเรียบร้อยแล้ว', 'warning')
