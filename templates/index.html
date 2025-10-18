@@ -59,27 +59,33 @@
         <div class="d-flex align-items-center">
 
             {% if current_user.is_authenticated %}
-                <form method="POST" action="{{ url_for('add_transaction') }}" style="display:inline;" class="me-2">
-                    <input type="hidden" name="type" value="Income">
-                    <input type="hidden" name="amount" value="28.00">
-                    <input type="hidden" name="category" value="อื่นๆ">
-                    <input type="hidden" name="date_posted" value="">
-                    <input type="hidden" name="description" value="รายรับด่วน 28 บาท">
-                    <button type="submit" class="btn btn-sm btn-info text-white fw-bold">
-                        +฿28
-                    </button>
-                </form>
 
-                <form method="POST" action="{{ url_for('add_transaction') }}" style="display:inline;" class="me-3">
-                    <input type="hidden" name="type" value="Income">
-                    <input type="hidden" name="amount" value="42.00">
-                    <input type="hidden" name="category" value="อื่นๆ">
-                    <input type="hidden" name="date_posted" value="">
-                    <input type="hidden" name="description" value="รายรับด่วน 42 บาท">
-                    <button type="submit" class="btn btn-sm btn-success fw-bold">
-                        +฿42
+                <div class="dropdown me-2">
+                    <button class="btn btn-warning dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        รายการโปรด
                     </button>
-                </form>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        {% for fav in favorites %}
+                        <li>
+                            <form method="POST" action="{{ url_for('add_transaction') }}" class="dropdown-item d-flex justify-content-between p-0">
+                                <input type="hidden" name="type" value="{{ fav.type }}">
+                                <input type="hidden" name="amount" value="{{ fav.amount }}">
+                                <input type="hidden" name="category" value="{{ fav.category }}">
+                                <input type="hidden" name="description" value="[โปรด] {{ fav.name }}">
+                                <input type="hidden" name="date_posted" value="{{ current_date }}">
+                                <button type="submit" class="btn btn-sm w-100 text-start ps-3" style="border: none; background: none;">
+                                    {{ fav.name }}
+                                    <span class="badge bg-{{ 'success' if fav.type == 'Income' else 'danger' }}">{{ "{:,.2f}".format(fav.amount) }}</span>
+                                </button>
+                            </form>
+                        </li>
+                        {% else %}
+                        <li><span class="dropdown-item text-muted">ยังไม่มีรายการโปรด</span></li>
+                        {% endfor %}
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item text-primary" href="{{ url_for('manage_favorites') }}">จัดการรายการโปรด</a></li>
+                    </ul>
+                </div>
 
                 <button class="btn btn-light text-primary me-2" data-bs-toggle="modal" data-bs-target="#addModal">
                     + เพิ่มรายการ
@@ -90,9 +96,11 @@
                 </form>
 
                 <span class="navbar-text me-2 text-white d-none d-sm-block">
-                    สวัสดี, {{ current_user.username }}
+                    <i class="bi bi-person-circle me-1"></i>{{ current_user.username }}
                 </span>
-                <a href="{{ url_for('logout') }}" class="btn btn-outline-light">ออกจากระบบ</a>
+                <a href="{{ url_for('logout') }}" class="btn btn-outline-light btn-sm">
+                    <i class="bi bi-box-arrow-right"></i> ออกจากระบบ
+                </a>
 
             {% else %}
                 <a href="{{ url_for('login') }}" class="btn btn-light text-primary me-2">เข้าสู่ระบบ</a>
@@ -195,10 +203,14 @@
                                 data-id="{{ t.id }}">
                             แก้ไข
                         </button>
-                        <form method="POST" action="{{ url_for('delete_transaction', transaction_id=t.id) }}"
-                              onsubmit="return confirm('ลบรายการนี้หรือไม่?')" style="display:inline;">
-                            <button class="btn btn-sm btn-outline-danger">ลบ</button>
-                        </form>
+
+                        <button class="btn btn-sm btn-outline-danger btn-delete-confirm"
+                                data-bs-toggle="modal"
+                                data-bs-target="#deleteTransactionConfirmModal"
+                                data-id="{{ t.id }}"
+                                data-name="{{ t.category }} (฿{{ "{:,.2f}".format(t.amount) }})">
+                            ลบ
+                        </button>
                     </td>
                 </tr>
                 {% else %}
@@ -294,6 +306,27 @@
     </div>
 </div>
 
+<div class="modal fade" id="deleteTransactionConfirmModal" tabindex="-1" aria-labelledby="deleteTransactionConfirmModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="deleteTransactionConfirmModalLabel">ยืนยันการลบรายการ</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center">
+                <p>คุณต้องการลบรายการ <strong><span id="transactionNamePlaceholder"></span></strong> ใช่หรือไม่?</p>
+                <small class="text-muted">รายการที่ถูกลบจะไม่สามารถกู้คืนได้</small>
+            </div>
+            <div class="modal-footer justify-content-center">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ยกเลิก</button>
+                <form id="deleteTransactionForm" method="POST" action="">
+                    <button type="submit" class="btn btn-danger">ยืนยันการลบ</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="toast-container">
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
@@ -343,30 +376,44 @@
          document.getElementById('expenseChart').parentNode.innerHTML = '<p class="text-center text-muted p-5">ยังไม่มีรายการรายจ่ายในระบบ กรุณาเพิ่มรายการเพื่อดูกราฟ</p>';
     }
 
-    // JavaScript สำหรับกรอกข้อมูลใน Modal แก้ไข
+    // JavaScript สำหรับกรอกข้อมูลใน Modal แก้ไข (Edit)
     document.addEventListener('DOMContentLoaded', function () {
         const editModal = document.getElementById('editModal');
         const editForm = document.getElementById('editForm');
+        const deleteConfirmModal = document.getElementById('deleteTransactionConfirmModal');
+        const deleteTransactionForm = document.getElementById('deleteTransactionForm');
+        const transactionNamePlaceholder = document.getElementById('transactionNamePlaceholder');
 
+        // Logic สำหรับ Modal แก้ไข (Edit)
         editModal.addEventListener('show.bs.modal', function (event) {
-            const button = event.relatedTarget; // ปุ่ม 'แก้ไข' ที่ถูกคลิก
-            const row = button.closest('tr'); // แถวในตาราง
-
-            // ดึงข้อมูลจาก data-* attributes ในแถวตาราง
+            const button = event.relatedTarget;
+            const row = button.closest('tr');
             const id = row.dataset.id;
             const type = row.dataset.type;
             const amount = row.dataset.amount;
             const category = row.dataset.category;
             const date = row.dataset.date;
 
-            // กำหนดค่าให้กับฟอร์มใน Modal
             document.getElementById('editType').value = type;
             document.getElementById('editAmount').value = amount;
             document.getElementById('editCategory').value = category;
             document.getElementById('editDate').value = date;
 
-            // กำหนด action URL ของฟอร์มเป็น /edit/<id>
             editForm.action = `/edit/${id}`;
+        });
+
+        // Logic สำหรับ Modal ลบ (Delete)
+        deleteConfirmModal.addEventListener('show.bs.modal', function (event) {
+            const button = event.relatedTarget; // ปุ่ม 'ลบ' ที่ถูกคลิก
+            const row = button.closest('tr'); // แถวในตาราง
+            const id = row.dataset.id;
+            const name = button.dataset.name; // ดึงชื่อรายการจาก data-name ในปุ่ม
+
+            // 1. แสดงชื่อรายการใน Modal
+            transactionNamePlaceholder.textContent = name;
+
+            // 2. กำหนด action URL ของฟอร์มลบ
+            deleteTransactionForm.action = `/delete/${id}`;
         });
     });
 </script>
